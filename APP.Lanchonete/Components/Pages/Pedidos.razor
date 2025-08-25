@@ -1,0 +1,317 @@
+@page "/pedidos"
+@rendermode InteractiveServer
+@using APP.Lanchonete.Models
+@inject HttpClient Http
+@inject IConfiguration Configuration
+
+<h3>Pedidos</h3>
+
+<button class="btn btn-primary mb-2" @onclick="NovoPedido">Novo Pedido</button>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+@if (pedidos == null)
+{
+    <p>Carregando...</p>
+}
+else if (pedidos.Count == 0)
+{
+    <p>Nenhum pedido cadastrado.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Usuário</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Itens</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var pedido in pedidos)
+            {
+                <tr>
+                    <td>@pedido.IdPedido</td>
+                    <td>@pedido.NomeUsuario</td>
+                    <td>@pedido.Status</td>
+                    <td>@pedido.DataCadastro.ToString("g")</td>
+                    <td>
+                        <ul>
+                            @foreach (var item in pedido.ItensPedido)
+                            {
+                                <li>@item.DescricaoProduto (Qtd: @item.Quantidade) - @item.Status</li>
+                            }
+                        </ul>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => EditarPedido(pedido)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ExcluirPedido(pedido)">Excluir</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (exibindoFormulario)
+{
+    <EditForm Model="pedidoAtual" OnValidSubmit="SalvarPedido">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="mb-2">
+            <label>Usuário:</label>
+            <InputText class="form-control" @bind-Value="pedidoAtual.NomeUsuario" Disabled="true" />
+        </div>
+        @if (editando)
+        {
+            <div class="mb-2">
+                <label>Status do Pedido:</label>
+                <InputSelect class="form-control" @bind-Value="pedidoAtual.Status">
+                    <option value="pendente">Pendente</option>
+                    <option value="em_preparo">Em preparo</option>
+                    <option value="pronto">Pronto</option>
+                    <option value="entregue">Entregue</option>
+                </InputSelect>
+            </div>
+        }
+        <hr />
+        <h5>Itens do Pedido</h5>
+        <div class="row mb-2">
+            <div class="col-6">
+                <label>Produto:</label>
+                <InputSelect class="form-control" @bind-Value="novoItem.IdProduto">
+                    <option value="">Selecione</option>
+                    @foreach (var produto in produtos)
+                    {
+                        <option value="@produto.IdProduto">@($"{produto.Nome} - {produto.Descricao}")</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-3">
+                <label>Quantidade:</label>
+                <InputNumber class="form-control" @bind-Value="novoItem.Quantidade" />
+            </div>
+            <div class="col-3 d-flex align-items-end">
+                <button class="btn btn-success" type="button" @onclick="AdicionarItem">Adicionar</button>
+            </div>
+        </div>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Produto</th>
+                    <th>Quantidade</th>
+                    @if (editando)
+                    {
+                        <th>Status</th>
+                    }
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in pedidoAtual.ItensPedido)
+                {
+                    <tr>
+                        <td>@item.DescricaoProduto</td>
+                        <td>
+                            <InputNumber class="form-control" @bind-Value="item.Quantidade" />
+                        </td>
+                        @if (editando)
+                        {
+                            <td>
+                                <InputSelect class="form-control" @bind-Value="item.Status">
+                                    <option value="pendente">Pendente</option>
+                                    <option value="em_preparo">Em preparo</option>
+                                    <option value="pronto">Pronto</option>
+                                    <option value="entregue">Entregue</option>
+                                </InputSelect>
+                            </td>
+                        }
+                        <td>
+                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => RemoverItem(item)">Remover</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="btn btn-success" type="submit">Salvar</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+}
+
+@code {
+    private List<Pedido>? pedidos = new();
+    private Pedido pedidoAtual = new() { ItensPedido = new List<ItemPedido>() };
+    private ItemPedido novoItem = new();
+    private List<Produto> produtos = new();
+    private bool jaInicializado = false;
+    private bool exibindoFormulario = false;
+    private bool editando = false;
+    private string? baseUrl;
+    private string? baseUrlProduto;
+    private string? mensagemErro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var url = Configuration["LanchoneteAPI:BaseUrl"];
+        baseUrl = $"{url}/pedido";
+        baseUrlProduto = $"{url}/produto";
+        Http.BaseAddress = new Uri(url!);
+
+        await CarregarPedidos();
+        await CarregarProdutos();
+    }
+
+    private async Task CarregarPedidos()
+    {
+        pedidos = await Http.GetFromJsonAsync<List<Pedido>>($"{baseUrl}/ListarPedidos");
+        StateHasChanged();
+    }
+
+    private async Task CarregarProdutos()
+    {
+        produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrlProduto}/ListarProdutos") ?? new();
+    }
+
+    private void NovoPedido()
+    {
+        pedidoAtual = new Pedido
+        {
+            ItensPedido = new List<ItemPedido>(),
+            Status = "pendente"
+        };
+        exibindoFormulario = true;
+        editando = false;
+        mensagemErro = null;
+        novoItem = new ItemPedido();
+        StateHasChanged();
+    }
+
+    private void EditarPedido(Pedido pedido)
+    {
+        pedidoAtual = new Pedido
+        {
+            IdPedido = pedido.IdPedido,
+            IdUsuario = pedido.IdUsuario,
+            NomeUsuario = pedido.NomeUsuario,
+            Status = pedido.Status,
+            DataCadastro = pedido.DataCadastro,
+            ItensPedido = pedido.ItensPedido.Select(i => new ItemPedido
+            {
+                IdItem = i.IdItem,
+                IdProduto = i.IdProduto,
+                Quantidade = i.Quantidade,
+                DescricaoProduto = i.DescricaoProduto,
+                Status = i.Status
+            }).ToList()
+        };
+        exibindoFormulario = true;
+        editando = true;
+        mensagemErro = null;
+        novoItem = new ItemPedido();
+        StateHasChanged();
+    }
+
+    private async Task ExcluirPedido(Pedido pedido)
+    {
+        var result = await Http.DeleteAsync($"{baseUrl}/{pedido.IdPedido}");
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao excluir pedido: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+        await CarregarPedidos();
+    }
+
+    private void Cancelar()
+    {
+        exibindoFormulario = false;
+        mensagemErro = null;
+    }
+
+    private void AdicionarItem()
+    {
+        if (novoItem.IdProduto == 0 || novoItem.Quantidade <= 0)
+            return;
+
+        var produto = produtos.FirstOrDefault(p => p.IdProduto == novoItem.IdProduto);
+        if (produto == null)
+            return;
+
+        var existente = pedidoAtual.ItensPedido.FirstOrDefault(i => i.IdProduto == novoItem.IdProduto);
+        if (existente != null)
+        {
+            existente.Quantidade += novoItem.Quantidade;
+        }
+        else
+        {
+            pedidoAtual.ItensPedido.Add(new ItemPedido
+            {
+                IdProduto = produto.IdProduto,
+                Quantidade = novoItem.Quantidade,
+                DescricaoProduto = produto.Nome,
+                Status = "pendente"
+            });
+        }
+        novoItem = new ItemPedido();
+    }
+
+    private void RemoverItem(ItemPedido item)
+    {
+        pedidoAtual.ItensPedido.Remove(item);
+    }
+
+    private async Task SalvarPedido()
+    {
+        mensagemErro = null;
+
+        if (pedidoAtual.ItensPedido == null || pedidoAtual.ItensPedido.Count == 0)
+        {
+            mensagemErro = "Adicione ao menos um item ao pedido.";
+            StateHasChanged();
+            return;
+        }
+
+        HttpResponseMessage result = editando
+            ? await Http.PutAsJsonAsync($"{baseUrl}/Atualizar", pedidoAtual)
+            : await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", pedidoAtual);
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+
+            try
+            {
+                // Tenta desserializar como uma lista de objetos de erro
+                var errors = System.Text.Json.JsonSerializer.Deserialize<List<ValidationError>>(errorContent);
+
+                if (errors != null && errors.Count > 0 && errors.All(e => !string.IsNullOrEmpty(e.ErrorMessage)))
+                {
+                    mensagemErro = string.Join("<br/>", errors.Select(e => e.ErrorMessage));
+                }
+                else
+                {
+                    mensagemErro = $"Erro ao salvar pedido: {errorContent}";
+                }
+            }
+            catch
+            {
+                mensagemErro = $"Erro ao salvar pedido: {errorContent}";
+            }
+
+            StateHasChanged();
+            return;
+        }
+
+        exibindoFormulario = false;
+        await CarregarPedidos();
+    }
+}
