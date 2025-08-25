@@ -1,0 +1,153 @@
+@page "/perfis"
+@rendermode InteractiveServer
+@using APP.Lanchonete.Models
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+
+<h3>Cadastro de Perfis</h3>
+
+<button class="btn btn-primary mb-2" @onclick="() => NovoPerfil()">Novo Perfil</button>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+@if (perfis == null)
+{
+    <p>Carregando...</p>
+}
+else if (perfis.Count == 0)
+{
+    <p>Nenhum perfil cadastrado.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var perfil in perfis)
+            {
+                <tr>
+                    <td>@perfil.Nome</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => EditarPerfil(perfil)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ExcluirPerfil(perfil)">Excluir</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (exibindoFormulario)
+{
+    <EditForm Model="perfilAtual" OnValidSubmit="SalvarPerfil">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+    @if (editando)
+    {
+        <div class="mb-2">
+            <label>ID:</label>
+            <InputNumber class="form-control" @bind-Value="perfilAtual.IdPerfil" />
+        </div>
+    }
+        <div class="mb-2">
+            <label>Nome:</label>
+            <InputText class="form-control" @bind-Value="perfilAtual.Nome" />
+        </div>
+        <div class="mb-2">
+            <label>Descrição:</label>
+            <InputText class="form-control" @bind-Value="perfilAtual.Descricao" />
+        </div>
+    @if (editando)
+    {
+        <div class="mb-2">
+            <label>Data de cadastro:</label>
+            <InputDate class="form-control" @bind-Value="perfilAtual.DataCadastro" />
+        </div>
+    }
+        <button class="btn btn-success" type="submit">Salvar</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+}
+
+@code {
+    private List<Perfil>? perfis;
+    private Perfil perfilAtual = new();
+    private bool exibindoFormulario = false;
+    private bool editando = false;
+    private string? baseUrl;
+    private string? mensagemErro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/perfil";
+        Http.BaseAddress = new Uri(baseUrl!);
+        await CarregarPerfis();
+    }
+
+    private async Task CarregarPerfis()
+    {
+        perfis = await Http.GetFromJsonAsync<List<Perfil>>($"{baseUrl}/ListarPerfis");
+        StateHasChanged();
+    }
+
+    private void NovoPerfil()
+    {
+        //await JS.InvokeVoidAsync("console.log", "EXECUTOU NOVOPERFIL");
+        //Console.WriteLine("EXECUTOU NOVOPERFIL");
+        perfilAtual = new Perfil();
+        exibindoFormulario = true;
+        editando = false;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private void EditarPerfil(Perfil perfil)
+    {
+        perfilAtual = new Perfil { IdPerfil = perfil.IdPerfil, Nome = perfil.Nome, Descricao = perfil.Descricao, DataCadastro = perfil.DataCadastro };
+        exibindoFormulario = true;
+        editando = true;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private async Task ExcluirPerfil(Perfil perfil)
+    {
+        await Http.DeleteAsync($"{baseUrl}/Excluir/{perfil.IdPerfil}");
+        await CarregarPerfis();
+    }
+
+    private void Cancelar()
+    {
+        exibindoFormulario = false;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private async Task SalvarPerfil()
+    {
+        mensagemErro = null;
+        HttpResponseMessage result = editando
+            ? await Http.PutAsJsonAsync($"{baseUrl}/Atualizar", perfilAtual)
+            : await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", perfilAtual);
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao salvar perfil: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+
+        exibindoFormulario = false;
+        await CarregarPerfis();
+    }
+}

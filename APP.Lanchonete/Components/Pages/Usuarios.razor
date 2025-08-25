@@ -1,0 +1,229 @@
+@page "/usuarios"
+@rendermode InteractiveServer
+@using APP.Lanchonete.Models
+@inject HttpClient Http
+@inject HttpClient HttpPerfil
+@inject IConfiguration Configuration
+
+<h3>Cadastro de Usuários</h3>
+
+<button class="btn btn-primary mb-2" @onclick="NovoUsuario">Novo Usuário</button>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+@if (usuarios == null)
+{
+    <p>Carregando...</p>
+}
+else if (usuarios.Count == 0)
+{
+    <p>Nenhum usuário cadastrado.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Nome</th>
+                <th>Email</th>
+                <th>Perfil</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var usuario in usuarios)
+            {
+                <tr>
+                    <td>@usuario.IdUsuario</td>
+                    <td>@usuario.Nome</td>
+                    <td>@usuario.Email</td>
+                    <td>@($"{usuario.IdPerfil} - {usuario.NomePerfil}")</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => EditarUsuario(usuario)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ExcluirUsuario(usuario)">Excluir</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (exibindoFormulario)
+{
+    <EditForm Model="usuarioAtual" OnValidSubmit="SalvarUsuario">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="mb-2">
+            <label>Nome:</label>
+            <InputText class="form-control" @bind-Value="usuarioAtual.Nome" />
+        </div>
+        <div class="mb-2">
+            <label>E-mail:</label>
+            <InputText class="form-control" @bind-Value="usuarioAtual.Email" />
+        </div>
+        <div class="mb-2">
+            <label for="Perfil">Perfil:</label>
+            <InputSelect class="form-control" @bind-Value="usuarioAtual.IdPerfil">
+                <option value="">Selecione o perfil</option>
+                @foreach (var perfil in perfis)
+                {
+                    <option value="@perfil.IdPerfil">@($"{perfil.IdPerfil} - {perfil.Nome}")</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="mb-2">
+            <label>Senha:</label>
+            <InputText class="form-control" @bind-Value="usuarioAtual.SenhaSemBase64" type="password" @onblur="OnSenhaBlur" />
+        </div>
+        @if (senhaModificada)
+        {
+            <div class="mb-2">
+                <label>Confirmar senha:</label>
+                <InputText class="form-control" @bind-Value="usuarioAtual.ConfirmarSenhaSemBase64" type="password" />
+                @if (!string.IsNullOrEmpty(mensagemSenha))
+                {
+                    <div class="text-danger">@mensagemSenha</div>
+                }
+            </div>
+        }
+        <button class="btn btn-success" type="submit">Salvar</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+}
+
+@code {
+    private List<Usuario>? usuarios = new();
+    private List<Perfil> perfis = new();
+    private Usuario usuarioAtual = new();
+    private bool exibindoFormulario = false;
+    private bool editando = false;
+    private bool senhaModificada = false;
+    private string? baseUrl;
+    private string? baseUrlPerfil;
+    private string? mensagemErro;
+    private string? mensagemSenha;
+
+    private void OnSenhaBlur(FocusEventArgs e)
+    {
+        senhaModificada = !string.IsNullOrEmpty(usuarioAtual.SenhaSemBase64.Trim());
+
+        if (!senhaModificada)
+            usuarioAtual.ConfirmarSenhaSemBase64 = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var url = Configuration["LanchoneteAPI:BaseUrl"];
+        baseUrl = $"{url}/usuario";
+        baseUrlPerfil = $"{url}/perfil";
+        Http.BaseAddress = new Uri(baseUrl!);
+        HttpPerfil.BaseAddress = new Uri(baseUrlPerfil!);
+        await CarregarUsuarios();
+        await CarregarPerfis();
+    }
+
+    #region Usuarios
+
+    private async Task CarregarUsuarios()
+    {
+        usuarios = await Http.GetFromJsonAsync<List<Usuario>>($"{baseUrl}/ListarUsuarios");
+        StateHasChanged();
+    }
+
+    private void NovoUsuario()
+    {
+        usuarioAtual = new Usuario();
+        exibindoFormulario = true;
+        editando = false;
+        mensagemErro = null;
+        mensagemSenha = null;
+        StateHasChanged();
+    }
+
+    private void EditarUsuario(Usuario usuario)
+    {
+        usuarioAtual = new Usuario
+        {
+            IdUsuario = usuario.IdUsuario,
+            Nome = usuario.Nome,
+            Email = usuario.Email,
+            Senha = usuario.Senha,
+            IdPerfil = usuario.IdPerfil,
+            NomePerfil = usuario.NomePerfil
+        };
+        exibindoFormulario = true;
+        editando = true;
+        mensagemErro = null;
+        mensagemSenha = null;
+        StateHasChanged();
+    }
+
+    private async Task ExcluirUsuario(Usuario usuario)
+    {
+        var result = await Http.DeleteAsync($"{baseUrl}/{usuario.IdUsuario}");
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao excluir usuário: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+
+        await CarregarUsuarios();
+    }
+
+    private void Cancelar()
+    {
+        exibindoFormulario = false;
+        mensagemSenha = null;
+    }
+
+    private async Task SalvarUsuario()
+    {
+        mensagemErro = null;
+        mensagemSenha = null;
+
+        if (usuarioAtual.SenhaSemBase64 != usuarioAtual.ConfirmarSenhaSemBase64)
+        {
+            mensagemSenha = "A senha e a confirmação de senha não conferem.";
+            StateHasChanged();
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(usuarioAtual.SenhaSemBase64.Trim()))
+        {
+            usuarioAtual.Senha = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(usuarioAtual.SenhaSemBase64));
+        }
+
+        HttpResponseMessage result = editando
+            ? await Http.PutAsJsonAsync($"{baseUrl}/Atualizar", usuarioAtual)
+            : await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", usuarioAtual);
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao salvar usuário: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+
+        exibindoFormulario = false;
+        await CarregarUsuarios();
+    }
+    #endregion Usuarios
+
+    #region Perfis
+
+    private async Task CarregarPerfis()
+    {
+        perfis = await HttpPerfil.GetFromJsonAsync<List<Perfil>>($"{baseUrlPerfil}/ListarPerfis") ?? new();
+        StateHasChanged();
+    }
+
+    #endregion Perfis
+}

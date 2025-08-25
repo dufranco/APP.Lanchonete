@@ -1,0 +1,177 @@
+﻿@page "/produtos"
+@rendermode InteractiveServer
+@using APP.Lanchonete.Models
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+
+<h3>Cadastro de Produtos</h3>
+
+<button class="btn btn-primary mb-2" @onclick="NovoProduto">Novo Produto</button>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+@if (produtos == null)
+{
+    <p>Carregando...</p>
+}
+else if (produtos.Count == 0)
+{
+    <p>Nenhum produto cadastrado.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Nome</th>
+                <th>Preço</th>
+                <th>Tipo</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var produto in produtos)
+            {
+                <tr>
+                    <td>@produto.IdProduto</td>
+                    <td>@produto.Nome</td>
+                    <td>@produto.Preco.ToString("C")</td>
+                    <td>@(char.ToUpper(produto.Tipo[0]) + produto.Tipo[1..])</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => EditarProduto(produto)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ExcluirProduto(produto)">Excluir</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (exibindoFormulario)
+{
+    <EditForm Model="produtoAtual" OnValidSubmit="SalvarProduto">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        @if (editando)
+        {
+            <div class="mb-2">
+                <label>ID:</label>
+                <InputNumber class="form-control" @bind-Value="produtoAtual.IdProduto" Disabled="true" />
+            </div>
+        }
+        <div class="mb-2">
+            <label>Nome:</label>
+            <InputText class="form-control" @bind-Value="produtoAtual.Nome" />
+        </div>
+        <div class="mb-2">
+            <label>Descrição:</label>
+            <InputText class="form-control" @bind-Value="produtoAtual.Descricao" />
+        </div>
+        <div class="mb-2">
+            <label>Preço:</label>
+            <InputNumber class="form-control" @bind-Value="produtoAtual.Preco" />
+        </div>
+        <div class="mb-2">
+            <label for="Tipo">Tipo:</label>
+            <InputSelect class="form-control" @bind-Value="produtoAtual.Tipo">
+                <option value="">Selecione o tipo</option>
+                <option value="bebida">Bebida</option>
+                <option value="prato">Prato</option>
+            </InputSelect>
+        </div>
+
+        @if (editando)
+        {
+            <div class="form-check mb-2">
+                <label class="form-check-label" for="Ativo">Ativo</label>
+                <InputCheckbox @bind-Value="produtoAtual!.Ativo" class="form-check-input" id="produtoAtual.Ativo"  />                
+            </div>
+            <div class="mb-2">
+                <label>Data de cadastro:</label>
+                <InputDate class="form-control" @bind-Value="produtoAtual!.DataCadastro" Disabled="true" />
+            </div>
+            <div class="mb-2">
+                <label>Última atualização:</label>
+                <InputDate class="form-control" @bind-Value="produtoAtual!.DataAtualizacao" Disabled="true" />
+            </div>
+        }
+        <button class="btn btn-success" type="submit">Salvar</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+}
+
+@code {
+    private List<Produto>? produtos = new();
+    private Produto produtoAtual = new();
+    private bool exibindoFormulario = false;
+    private bool editando = false;
+    private string? baseUrl;
+    private string? mensagemErro;
+    private bool ativo = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/produto";
+        Http.BaseAddress = new Uri(baseUrl!);
+        await CarregarProdutos();
+    }
+
+    private async Task CarregarProdutos()
+    {
+        produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrl}/ListarProdutos");
+        StateHasChanged();
+    }
+
+    private void NovoProduto()
+    {
+        produtoAtual = new Produto();
+        exibindoFormulario = true;
+        editando = false;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private void EditarProduto(Produto produto)
+    {
+        produtoAtual = new Produto { IdProduto = produto.IdProduto, Nome = produto.Nome, Preco = produto.Preco, Ativo = produto.Ativo, DataAtualizacao = produto.DataAtualizacao, Descricao = produto.Descricao, DataCadastro = produto.DataCadastro, Tipo = produto.Tipo };
+        exibindoFormulario = true;
+        editando = true;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private async Task ExcluirProduto(Produto produto)
+    {
+        await Http.DeleteAsync($"{baseUrl}/Excluir/{produto.IdProduto}");
+        await CarregarProdutos(); //TODO: Verificar a possibilidade de excluir o produto direto da lista sem precisar recarregar tudo. Ex.: produtos.Remove(produto)
+    }
+
+    private void Cancelar()
+    {
+        exibindoFormulario = false;
+    }
+
+    private async Task SalvarProduto()
+    {
+        mensagemErro = null;
+        HttpResponseMessage result = editando
+            ? await Http.PutAsJsonAsync($"{baseUrl}/Atualizar", produtoAtual)
+            : await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", produtoAtual);
+        
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao salvar produto: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+
+        exibindoFormulario = false;
+        await CarregarProdutos(); //TODO: Verificar a possibilidade de incluir o produto direto da lista sem precisar recarregar tudo. Ex.: produtos.Add(produtoAtual)
+    }
+}
