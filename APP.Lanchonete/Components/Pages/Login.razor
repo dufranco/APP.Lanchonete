@@ -1,0 +1,208 @@
+@* @page "/login"
+@using System.IdentityModel.Tokens.Jwt
+@using System.Security.Claims
+@using System.Text
+@using APP.Lanchonete.Models
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<h3>Login</h3>
+ *@
+@page "/login"
+@using System.IdentityModel.Tokens.Jwt
+@using System.Security.Claims
+@using System.Text
+@using APP.Lanchonete.Models
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<h3>Login</h3>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+    <div class="w-100" style="max-width: 400px;">
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="mb-2">
+                <label for="emailInput">Email:</label>
+                <InputText id="emailInput" class="form-control" @bind-Value="loginModel.Email" type="email" />
+            </div>
+            <div class="mb-2">
+                <label for="senhaInput">Senha:</label>
+                <InputText id="senhaInput" class="form-control" @bind-Value="loginModel.Senha" type="password" />
+            </div>
+            <button class="btn btn-success w-100" type="submit">Entrar</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private AutenticacaoRequest loginModel = new();
+    private string? mensagemErro;
+    private string? baseUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/usuario";
+        Http.BaseAddress = new Uri(baseUrl!);
+        await Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var jwtToken = await JS.InvokeAsync<string>("localStorage.getItem", "JwtToken");
+
+            if (!string.IsNullOrWhiteSpace(jwtToken))
+            {
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            //else
+            //{
+            //    // Recarregar o NavMenu via JS interop (emitir evento ou atualizar estado)
+            //    await JS.InvokeVoidAsync("eval", "dispatchEvent(new CustomEvent('navMenuReload'))");
+            //}
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        mensagemErro = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"{baseUrl}/autenticar", new AutenticacaoRequest
+            {
+                Email = loginModel.Email,
+                Senha = Convert.ToBase64String(Encoding.UTF8.GetBytes(loginModel.Senha))
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                mensagemErro = "Usuário ou senha inválidos.";
+                return;
+            }
+
+            var token = await response.Content.ReadAsStringAsync();
+            var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
+            var claims = jwtToken.Claims.ToDictionary(c => c.Type, c => c.Value);
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "JwtToken", token);
+            await JS.InvokeVoidAsync("localStorage.setItem", "IdUsuario", claims.GetValueOrDefault("IdUsuario"));
+            await JS.InvokeVoidAsync("localStorage.setItem", "Nome", claims.GetValueOrDefault("Nome"));
+            await JS.InvokeVoidAsync("localStorage.setItem", "Email", claims.GetValueOrDefault("Email"));
+            await JS.InvokeVoidAsync("localStorage.setItem", "IdPerfil", claims.GetValueOrDefault("IdPerfil"));
+            await JS.InvokeVoidAsync("localStorage.setItem", "NomePerfil", claims.GetValueOrDefault("NomePerfil"));
+            await JS.InvokeVoidAsync("localStorage.setItem", "TelasPermitidas", claims.GetValueOrDefault("TelasPermitidas"));
+
+            Navigation.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            mensagemErro = "Erro ao tentar autenticar. Tente novamente.";
+        }
+    }
+}
+@* @if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+ <EditForm Model="loginModel" OnValidSubmit="HandleLogin" FormName="loginForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="mb-2">
+        <label>Email:</label>
+        <InputText class="form-control" @bind-Value="loginModel.Email" type="email" />
+    </div>
+    <div class="mb-2">
+        <label>Senha:</label>
+        <InputText class="form-control" @bind-Value="loginModel.Senha" type="password" />
+    </div>
+    <button class="btn btn-success" type="submit">Entrar</button>
+</EditForm> 
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="mb-2">
+        <label for="emailInput">Email:</label>
+        <InputText id="emailInput" class="form-control" @bind-Value="loginModel.Email" type="email" />
+    </div>
+    <div class="mb-2">
+        <label for="senhaInput">Senha:</label>
+        <InputText id="senhaInput" class="form-control" @bind-Value="loginModel.Senha" type="password" />
+    </div>
+    <button class="btn btn-success" type="submit">Entrar</button>
+</EditForm>
+
+@code {
+    private AutenticacaoRequest loginModel = new();
+    private string? mensagemErro;
+
+    private async Task HandleLogin()
+    {
+        mensagemErro = null;
+        var baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/usuario";
+        var secretKey = Configuration["LanchoneteAPI:SecretKey"];
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/autenticar")
+        {
+            //Content = JsonContent.Create(new AutenticacaoRequest
+            //{
+            //    Email = loginModel.Email,
+            //    Senha = Convert.ToBase64String(Encoding.UTF8.GetBytes(loginModel.Senha))
+            //})
+        };
+
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", GerarJwtParaHeader(secretKey!));
+
+        
+        var response = await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", loginModel);//Http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            mensagemErro = "Usuário ou senha inválidos.";
+            return;
+        }
+
+        var token = await response.Content.ReadAsStringAsync();
+        var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        var claims = jwtToken.Claims.ToDictionary(c => c.Type, c => c.Value);
+
+        await JS.InvokeVoidAsync("localStorage.setItem", "JwtToken", token);
+        await JS.InvokeVoidAsync("localStorage.setItem", "IdUsuario", claims.GetValueOrDefault("IdUsuario"));
+        await JS.InvokeVoidAsync("localStorage.setItem", "Nome", claims.GetValueOrDefault("Nome"));
+        await JS.InvokeVoidAsync("localStorage.setItem", "Email", claims.GetValueOrDefault("Email"));
+        await JS.InvokeVoidAsync("localStorage.setItem", "IdPerfil", claims.GetValueOrDefault("IdPerfil"));
+        await JS.InvokeVoidAsync("localStorage.setItem", "NomePerfil", claims.GetValueOrDefault("NomePerfil"));
+        await JS.InvokeVoidAsync("localStorage.setItem", "TelasPermitidas", claims.GetValueOrDefault("TelasPermitidas"));
+
+        Navigation.NavigateTo("/");
+    }
+
+    private string GerarJwtParaHeader(string secretKey)
+    {
+        var key = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var creds = new Microsoft.IdentityModel.Tokens.SigningCredentials(key, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            claims: null,
+            expires: DateTime.UtcNow.AddMinutes(5),
+            signingCredentials: creds);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }    
+} *@
