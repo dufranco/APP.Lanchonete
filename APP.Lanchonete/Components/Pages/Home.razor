@@ -1,7 +1,24 @@
 ﻿@page "/"
 
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
 <PageTitle>Home</PageTitle>
 
 <h1>Olá!</h1>
 
 Seja bem-vindo ao sistema de lanchonete.
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var jwtToken = await JS.InvokeAsync<string>("localStorage.getItem", "JwtToken");            
+
+            if (string.IsNullOrWhiteSpace(jwtToken))
+                Navigation.NavigateTo("/login", forceLoad: true, replace: true);
+        }
+    }
+}
