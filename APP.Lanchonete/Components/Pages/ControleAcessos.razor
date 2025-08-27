@@ -1,0 +1,207 @@
+﻿@page "/controleacessos"
+@rendermode InteractiveServer
+@using APP.Lanchonete.Models
+@inject HttpClient Http
+@inject IConfiguration Configuration
+
+<h3>Controle de Acesso</h3>
+
+<button class="btn btn-primary mb-2" @onclick="NovoControle">Novo Controle</button>
+
+@if (!string.IsNullOrEmpty(mensagemErro))
+{
+    <div class="alert alert-danger">@mensagemErro</div>
+}
+
+@if (controles == null)
+{
+    <p>Carregando...</p>
+}
+else if (controles.Count == 0)
+{
+    <p>Nenhum controle de acesso cadastrado.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Perfil</th>
+                <th>Tela</th>
+                <th>Permitido</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var controle in controles)
+            {
+                <tr>
+                    <td>@controle.IdControle</td>
+                    <td>@controle.NomePerfil</td>
+                    <td>@controle.NomeTela</td>
+                    <td>
+                        @if (controle.Permitido)
+                        {
+                            <span class="text-success fw-bold">Sim</span>
+                        }
+                        else
+                        {
+                            <span class="text-danger fw-bold">Não</span>
+                        }
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => EditarControle(controle)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ExcluirControle(controle)">Excluir</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (exibindoFormulario)
+{
+    <EditForm Model="controleAtual" OnValidSubmit="SalvarControle">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        @if (editando)
+        {
+            <div class="mb-2">
+                <label>ID:</label>
+                <InputNumber class="form-control" @bind-Value="controleAtual.IdControle" Disabled="true" />
+            </div>
+        }
+        <div class="mb-2">
+            <label>Perfil:</label>
+            <InputSelect class="form-control" @bind-Value="controleAtual.IdPerfil">
+                <option value="">Selecione...</option>
+                @if (perfis != null)
+                {
+                    @foreach (var perfil in perfis)
+                    {
+                        <option value="@perfil.IdPerfil">@perfil.Nome</option>
+                    }
+                }
+            </InputSelect>
+        </div>
+        <div class="mb-2">
+            <label>Tela:</label>
+            <InputSelect class="form-control" @bind-Value="controleAtual.NomeTela">
+                <option value="">Selecione...</option>
+                <option value="cadastro_controleacessos">Cadastro de Controle de Acessos</option>
+                <option value="cadastro_pedidos">Cadastro de Pedidos</option>
+                <option value="cadastro_perfis">Cadastro de Perfis</option>
+                <option value="cadastro_produtos">Cadastro de Produtos</option>
+                <option value="cadastro_usuarios">Cadastro de Usuários</option>
+            </InputSelect>
+        </div>
+        <div class="form-check mb-2">
+            <label class="form-check-label" for="Permitido">Permitido</label>
+            <InputCheckbox @bind-Value="controleAtual.Permitido" class="form-check-input" id="controleAtual.Permitido" />
+        </div>
+        <button class="btn btn-success" type="submit">Salvar</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancelar">Cancelar</button>
+    </EditForm>
+}
+
+@code {
+    private List<ControleAcesso>? controles = new();
+    private ControleAcesso controleAtual = new();
+    private bool exibindoFormulario = false;
+    private bool editando = false;
+    private string? baseUrl;
+    private string? mensagemErro;
+    private List<Perfil>? perfis;
+
+    protected override async Task OnInitializedAsync()
+    {
+        baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/controleacesso";
+        Http.BaseAddress = new Uri(baseUrl!);
+        await CarregarPerfis();
+        await CarregarControles();
+    }
+
+    private async Task CarregarControles()
+    {
+        controles = await Http.GetFromJsonAsync<List<ControleAcesso>>($"{baseUrl}/listarcontroleacessos");
+        StateHasChanged();
+    }
+
+    private async Task CarregarPerfis()
+    {
+        var perfilBaseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/perfil";
+        perfis = await Http.GetFromJsonAsync<List<Perfil>>($"{perfilBaseUrl}/ListarPerfis");
+    }
+
+    private void NovoControle()
+    {
+        controleAtual = new ControleAcesso();
+        exibindoFormulario = true;
+        editando = false;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private void EditarControle(ControleAcesso controle)
+    {
+        controleAtual = new ControleAcesso
+        {
+            IdControle = controle.IdControle,
+            IdPerfil = controle.IdPerfil,
+            NomePerfil = controle.NomePerfil,
+            NomeTela = controle.NomeTela,
+            Permitido = controle.Permitido
+        };
+        exibindoFormulario = true;
+        editando = true;
+        mensagemErro = null;
+        StateHasChanged();
+    }
+
+    private async Task ExcluirControle(ControleAcesso controle)
+    {
+        await Http.DeleteAsync($"{baseUrl}/Excluir/{controle.IdControle}");
+        await CarregarControles();
+    }
+
+    private void Cancelar()
+    {
+        exibindoFormulario = false;
+    }
+
+    private async Task SalvarControle()
+    {
+        mensagemErro = null;
+        // Atualiza o NomePerfil conforme o IdPerfil selecionado
+        if (perfis != null)
+        {
+            var perfilSelecionado = perfis.FirstOrDefault(p => p.IdPerfil == controleAtual.IdPerfil);
+            if (perfilSelecionado != null)
+            {
+                controleAtual.NomePerfil = perfilSelecionado.Nome;
+            }
+        }
+
+        HttpResponseMessage result = editando
+            ? await Http.PutAsJsonAsync($"{baseUrl}/Atualizar", controleAtual)
+            : await Http.PostAsJsonAsync($"{baseUrl}/Cadastrar", controleAtual);
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+            mensagemErro = $"Erro ao salvar controle: {errorContent}";
+            StateHasChanged();
+            return;
+        }
+
+        exibindoFormulario = false;
+        await CarregarControles();
+    }
+
+    // public class Perfil
+    // {
+    //     public int IdPerfil { get; set; }
+    //     public string NomePerfil { get; set; } = string.Empty;
+    // }
+}
