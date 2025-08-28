@@ -4,6 +4,8 @@
 @inject HttpClient Http
 @inject HttpClient HttpPerfil
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <h3>Cadastro de Usuários</h3>
 
@@ -124,6 +126,17 @@ else
         HttpPerfil.BaseAddress = new Uri(baseUrlPerfil!);
         await CarregarUsuarios();
         await CarregarPerfis();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var telasPermitidas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+
+            if (string.IsNullOrEmpty(telasPermitidas) || !telasPermitidas.Contains("cadastro_usuarios"))
+                Navigation.NavigateTo("/");
+        }
     }
 
     #region Usuarios

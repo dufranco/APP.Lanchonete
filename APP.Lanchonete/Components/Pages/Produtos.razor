@@ -3,6 +3,7 @@
 @using APP.Lanchonete.Models
 @inject HttpClient Http
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <h3>Cadastro de Produtos</h3>
@@ -119,6 +120,17 @@ else
         baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/produto";
         Http.BaseAddress = new Uri(baseUrl!);
         await CarregarProdutos();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var telasPermitidas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+
+            if (string.IsNullOrEmpty(telasPermitidas) || !telasPermitidas.Contains("cadastro_produtos"))
+                Navigation.NavigateTo("/");
+        }
     }
 
     private async Task CarregarProdutos()

@@ -3,6 +3,8 @@
 @using APP.Lanchonete.Models
 @inject HttpClient Http
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <h3>Pedidos</h3>
 
@@ -166,6 +168,17 @@ else
 
         await CarregarPedidos();
         await CarregarProdutos();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var telasPermitidas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+
+            if (string.IsNullOrEmpty(telasPermitidas) || !telasPermitidas.Contains("cadastro_pedidos"))
+                Navigation.NavigateTo("/");
+        }
     }
 
     private async Task CarregarPedidos()

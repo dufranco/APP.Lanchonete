@@ -3,6 +3,7 @@
 @using APP.Lanchonete.Models
 @inject HttpClient Http
 @inject IConfiguration Configuration
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <h3>Cadastro de Perfis</h3>
@@ -91,6 +92,17 @@ else
         baseUrl = $"{Configuration["LanchoneteAPI:BaseUrl"]}/perfil";
         Http.BaseAddress = new Uri(baseUrl!);
         await CarregarPerfis();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var telasPermitidas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+
+            if (string.IsNullOrEmpty(telasPermitidas) || !telasPermitidas.Contains("cadastro_perfis"))
+                Navigation.NavigateTo("/");
+        }
     }
 
     private async Task CarregarPerfis()

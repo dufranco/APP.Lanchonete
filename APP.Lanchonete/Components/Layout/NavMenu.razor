@@ -20,47 +20,50 @@
                 </NavLink>
             </div>
 
-            @*         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
+            @if (HasPermission("cadastro_produtos"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="produtos">
+                        <span class="bi bi-box-seam-fill-nav-menu"></span> Produtos
+                    </NavLink>
+                </div>
+            }
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div> *@
+            @if (HasPermission("cadastro_perfis"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="perfis">
+                        <span class="bi bi-people-fill-nav-menu"></span> Perfis
+                    </NavLink>
+                </div>
+            }
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="produtos">
-                    <span class="bi bi-box-seam-fill-nav-menu"></span> Produtos
-                </NavLink>
-            </div>
+            @if (HasPermission("cadastro_usuarios"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="usuarios">
+                        <span class="bi bi-person-circle-nav-menu"></span> Usuários
+                    </NavLink>
+                </div>
+            }
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="perfis">
-                    <span class="bi bi-people-fill-nav-menu"></span> Perfis
-                </NavLink>
-            </div>
+            @if (HasPermission("cadastro_pedidos"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="pedidos">
+                        <span class="bi bi-bag-fill-nav-menu"></span> Pedidos
+                    </NavLink>
+                </div>
+            }
 
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="usuarios">
-                    <span class="bi bi-person-circle-nav-menu"></span> Usuários
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="pedidos">
-                    <span class="bi bi-bag-fill-nav-menu"></span> Pedidos
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="controleacessos">
-                    <span class="bi bi-person-fill-gear-nav-menu"></span> Controle de Acessos
-                </NavLink>
-            </div>
+            @if (HasPermission("cadastro_controleacessos"))
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="controleacessos">
+                        <span class="bi bi-person-fill-gear-nav-menu"></span> Controle de Acessos
+                    </NavLink>
+                </div>
+            }
 
             <div class="nav-item px-3 mt-auto logout-bottom">
                 <button class="btn btn-danger w-100" @onclick="Logout">
@@ -76,6 +79,7 @@
 
 @code {
     private bool logado = false;
+    private HashSet<string> telasPermitidas = new();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -83,8 +87,24 @@
         {
             var jwtToken = await JS.InvokeAsync<string>("localStorage.getItem", "JwtToken");
             logado = !string.IsNullOrWhiteSpace(jwtToken);
+
+            var telas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+            if (!string.IsNullOrWhiteSpace(telas))
+            {
+                telasPermitidas = new HashSet<string>(telas.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase);
+            }
+            else
+            {
+                telasPermitidas.Clear();
+            }
+
             StateHasChanged();
         }
+    }
+
+    private bool HasPermission(string tela)
+    {
+        return telasPermitidas.Contains(tela);
     }
 
     private async Task Logout()
@@ -95,6 +115,7 @@
             await JS.InvokeVoidAsync("localStorage.removeItem", key);
 
         logado = false;
+        telasPermitidas.Clear();
         StateHasChanged();
         Navigation.NavigateTo("/login", forceLoad: true);
     }
