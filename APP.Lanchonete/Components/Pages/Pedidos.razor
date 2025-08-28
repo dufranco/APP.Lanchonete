@@ -193,7 +193,19 @@ else
 
     private async Task CarregarProdutos()
     {
-        produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrlProduto}/ListarProdutos") ?? new();
+        try
+        {
+            produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrlProduto}/ListarProdutos") ?? new();
+            StateHasChanged();
+        }
+        catch (HttpRequestException ex)
+        {
+            if (ex.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                mensagemErro = ex.Message;
+                StateHasChanged();
+            }
+        }
     }
 
     private void NovoPedido()
@@ -280,37 +292,41 @@ else
                     Status = "pendente"
                 };
 
-            HttpResponseMessage result = await Http.PostAsJsonAsync($"{baseUrl}/{pedidoAtual.IdPedido}/item", itemPedido);
-
-            if (!result.IsSuccessStatusCode)
+            if (pedidoAtual.IdPedido != 0)
             {
-                var errorContent = await result.Content.ReadAsStringAsync();
+                HttpResponseMessage result = await Http.PostAsJsonAsync($"{baseUrl}/{pedidoAtual.IdPedido}/item", itemPedido);
 
-                try
+                if (!result.IsSuccessStatusCode)
                 {
-                    var errors = System.Text.Json.JsonSerializer.Deserialize<List<ValidationError>>(errorContent);
+                    var errorContent = await result.Content.ReadAsStringAsync();
 
-                    if (errors != null && errors.Count > 0 && errors.All(e => !string.IsNullOrEmpty(e.ErrorMessage)))
+                    try
                     {
-                        mensagemErro = string.Join("<br/>", errors.Select(e => e.ErrorMessage));
+                        var errors = System.Text.Json.JsonSerializer.Deserialize<List<ValidationError>>(errorContent);
+
+                        if (errors != null && errors.Count > 0 && errors.All(e => !string.IsNullOrEmpty(e.ErrorMessage)))
+                        {
+                            mensagemErro = string.Join("<br/>", errors.Select(e => e.ErrorMessage));
+                        }
+                        else
+                        {
+                            mensagemErro = $"Erro ao incluir item do pedido: {errorContent}";
+                        }
                     }
-                    else
+                    catch
                     {
                         mensagemErro = $"Erro ao incluir item do pedido: {errorContent}";
                     }
-                }
-                catch
-                {
-                    mensagemErro = $"Erro ao incluir item do pedido: {errorContent}";
+
+                    StateHasChanged();
+                    return;
                 }
 
-                StateHasChanged();
-                return;
+                var itemPedidoContent = await result.Content.ReadAsStringAsync();
+                var itemPedidoResult = System.Text.Json.JsonSerializer.Deserialize<ItemPedido>(itemPedidoContent);
+                itemPedido.IdItem = itemPedidoResult.IdItem;
             }
 
-            var itemPedidoContent = await result.Content.ReadAsStringAsync();
-            var itemPedidoResult = System.Text.Json.JsonSerializer.Deserialize<ItemPedido>(itemPedidoContent);
-            itemPedido.IdItem = itemPedidoResult.IdItem;
             pedidoAtual.ItensPedido.Add(itemPedido);
         }
 

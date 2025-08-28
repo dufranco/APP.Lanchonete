@@ -135,8 +135,19 @@ else
 
     private async Task CarregarProdutos()
     {
-        produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrl}/ListarProdutos");
-        StateHasChanged();
+        try
+        {
+            produtos = await Http.GetFromJsonAsync<List<Produto>>($"{baseUrl}/ListarProdutos");
+            StateHasChanged();
+        }
+        catch (HttpRequestException ex)
+        {
+            if (ex.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                mensagemErro = ex.Message;
+                StateHasChanged();
+            }
+        }
     }
 
     private void NovoProduto()
