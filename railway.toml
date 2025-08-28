@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "./APP.Lanchonete/Dockerfile"
+dockerContext = "./APP.Lanchonete"
+
+[deploy]
+startCommand = "dotnet APP.Lanchonete.dll"
+restartPolicyType = "always"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
