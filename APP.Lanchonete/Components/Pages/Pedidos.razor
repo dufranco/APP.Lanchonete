@@ -158,6 +158,8 @@ else
     private string? baseUrl;
     private string? baseUrlProduto;
     private string? mensagemErro;
+    private int? idUsuarioLogado;
+    private string? nomeUsuarioLogado;
 
     protected override async Task OnInitializedAsync()
     {
@@ -175,6 +177,8 @@ else
         if (firstRender)
         {
             var telasPermitidas = await JS.InvokeAsync<string>("localStorage.getItem", "TelasPermitidas");
+            idUsuarioLogado = Convert.ToInt32(await JS.InvokeAsync<string>("localStorage.getItem", "IdUsuario"));
+            nomeUsuarioLogado = await JS.InvokeAsync<string>("localStorage.getItem", "Nome");
 
             if (string.IsNullOrEmpty(telasPermitidas) || !telasPermitidas.Contains("cadastro_pedidos"))
                 Navigation.NavigateTo("/");
@@ -197,7 +201,9 @@ else
         pedidoAtual = new Pedido
         {
             ItensPedido = new List<ItemPedido>(),
-            Status = "pendente"
+            Status = "pendente",
+            IdUsuario = idUsuarioLogado!.Value,
+            NomeUsuario = nomeUsuarioLogado!
         };
         exibindoFormulario = true;
         editando = false;
@@ -250,7 +256,7 @@ else
         mensagemErro = null;
     }
 
-    private void AdicionarItem()
+    private async Task AdicionarItem()
     {
         if (novoItem.IdProduto == 0 || novoItem.Quantidade <= 0)
             return;
@@ -266,19 +272,81 @@ else
         }
         else
         {
-            pedidoAtual.ItensPedido.Add(new ItemPedido
+            var itemPedido = new ItemPedido
+                {
+                    IdProduto = produto.IdProduto,
+                    Quantidade = novoItem.Quantidade,
+                    DescricaoProduto = produto.Nome,
+                    Status = "pendente"
+                };
+
+            HttpResponseMessage result = await Http.PostAsJsonAsync($"{baseUrl}/{pedidoAtual.IdPedido}/item", itemPedido);
+
+            if (!result.IsSuccessStatusCode)
             {
-                IdProduto = produto.IdProduto,
-                Quantidade = novoItem.Quantidade,
-                DescricaoProduto = produto.Nome,
-                Status = "pendente"
-            });
+                var errorContent = await result.Content.ReadAsStringAsync();
+
+                try
+                {
+                    var errors = System.Text.Json.JsonSerializer.Deserialize<List<ValidationError>>(errorContent);
+
+                    if (errors != null && errors.Count > 0 && errors.All(e => !string.IsNullOrEmpty(e.ErrorMessage)))
+                    {
+                        mensagemErro = string.Join("<br/>", errors.Select(e => e.ErrorMessage));
+                    }
+                    else
+                    {
+                        mensagemErro = $"Erro ao incluir item do pedido: {errorContent}";
+                    }
+                }
+                catch
+                {
+                    mensagemErro = $"Erro ao incluir item do pedido: {errorContent}";
+                }
+
+                StateHasChanged();
+                return;
+            }
+
+            var itemPedidoContent = await result.Content.ReadAsStringAsync();
+            var itemPedidoResult = System.Text.Json.JsonSerializer.Deserialize<ItemPedido>(itemPedidoContent);
+            itemPedido.IdItem = itemPedidoResult.IdItem;
+            pedidoAtual.ItensPedido.Add(itemPedido);
         }
+
         novoItem = new ItemPedido();
     }
 
-    private void RemoverItem(ItemPedido item)
+    private async Task RemoverItem(ItemPedido item)
     {
+        var result = await Http.DeleteAsync($"{baseUrl}/{pedidoAtual.IdPedido}/item/{item.IdItem}");
+
+        if (!result.IsSuccessStatusCode)
+        {
+            var errorContent = await result.Content.ReadAsStringAsync();
+
+            try
+            {
+                var errors = System.Text.Json.JsonSerializer.Deserialize<List<ValidationError>>(errorContent);
+
+                if (errors != null && errors.Count > 0 && errors.All(e => !string.IsNullOrEmpty(e.ErrorMessage)))
+                {
+                    mensagemErro = string.Join("<br/>", errors.Select(e => e.ErrorMessage));
+                }
+                else
+                {
+                    mensagemErro = $"Erro ao excluir item do pedido: {errorContent}";
+                }
+            }
+            catch
+            {
+                mensagemErro = $"Erro ao excluir item do pedido: {errorContent}";
+            }
+
+            StateHasChanged();
+            return;
+        }
+
         pedidoAtual.ItensPedido.Remove(item);
     }
 
