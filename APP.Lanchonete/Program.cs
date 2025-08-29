@@ -1,4 +1,7 @@
+using System.Text;
 using APP.Lanchonete.Components;
+
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 var builder = WebApplication.CreateBuilder(args);
 

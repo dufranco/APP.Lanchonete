@@ -27,4 +27,7 @@ RUN dotnet publish "./APP.Lanchonete.csproj" -c $BUILD_CONFIGURATION -o /app/pub
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN apk add --no-cache icu-libs
+ENV LANG=pt_BR.UTF-8
+ENV LC_ALL=pt_BR.UTF-8
 ENTRYPOINT ["dotnet", "APP.Lanchonete.dll"]
