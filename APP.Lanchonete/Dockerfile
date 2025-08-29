@@ -2,6 +2,10 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
+RUN apk add --no-cache musl-locales musl-locales-lang
+ENV LANG=pt_BR.UTF-8
+ENV LC_ALL=pt_BR.UTF-8
+
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
@@ -27,7 +31,4 @@ RUN dotnet publish "./APP.Lanchonete.csproj" -c $BUILD_CONFIGURATION -o /app/pub
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-RUN apk add --no-cache icu-libs
-ENV LANG=pt_BR.UTF-8
-ENV LC_ALL=pt_BR.UTF-8
 ENTRYPOINT ["dotnet", "APP.Lanchonete.dll"]
