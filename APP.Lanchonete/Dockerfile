@@ -2,9 +2,20 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS base
-RUN apk add --no-cache musl-locales musl-locales-lang
+
+# Instala suporte a locale pt_BR.UTF-8
+RUN apk add --no-cache icu-libs tzdata \
+    && apk add --no-cache --virtual .build-deps icu-data-full \
+    && cp /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime \
+    && echo "America/Sao_Paulo" > /etc/timezone \
+    && apk del .build-deps \
+    && echo "pt_BR.UTF-8 UTF-8" > /etc/locale.gen \
+    && echo "LANG=pt_BR.UTF-8" > /etc/locale.conf \
+    && export LANG=pt_BR.UTF-8
+
 ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
+ENV TZ=America/Sao_Paulo
 
 USER $APP_UID
 WORKDIR /app
